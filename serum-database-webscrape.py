@@ -89,17 +89,9 @@ def find_bp_mp_sol(links):
 		parsed_webpage = parsed_webpage.find("table", class_="table table-bordered")
 		parsed_webpage = parsed_webpage.find("tbody")
 		parsed_webpage = parsed_webpage.find_all("td")
-		meltingpoint.append(parsed_webpage[1])
-		boilingpoint.append(parsed_webpage[3])
-		solubility.append(parsed_webpage[5])
-		# for tag in parsed_webpage:
-			# print(tag.text)
-			
-			# if parsed_webpage[i].text == "Melting Point":
-			# 	print(parsed_webpage[i + 1])
-		
-
-		# parsed_webpage = parsed_webpage.find_all("th")
+		meltingpoint.append(parsed_webpage[1].text)
+		boilingpoint.append(parsed_webpage[2].text)
+		solubility.append(parsed_webpage[7].text)
 	return meltingpoint, boilingpoint, solubility
 
 def make_data_table(names, links, structures_filenames, weights):
@@ -113,10 +105,10 @@ def main():
 	parsed = BeautifulSoup(url_obj.content, 'html.parser')
 	
 	names = get_names(parsed)
-	# structures_filenames = get_structures(parsed, names)
+	structures_filenames = get_structures(parsed, names)
 	links = get_links(parsed)
-	# abundances = find_abundances(links)
-	# weights = find_weights(links)
+	abundances = find_abundances(links)
+	weights = find_weights(links)
 	meltingpoint, boilingpoint, solubility = find_bp_mp_sol(links)
 
 	# data_table = make_data_table(names, links, structures_filenames, weights, abundances)
