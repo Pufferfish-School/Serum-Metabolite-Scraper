@@ -79,14 +79,28 @@ def find_weights(links):
 				break
 	return weights
 
-def find_boilingpoint(links):
-	boilingpoints = []
+def find_bp_mp_sol(links):
+	boilingpoint = []
+	meltingpoint = []
+	solubility = []
 	for link in links:
 		link = get_url(link)
 		parsed_webpage = BeautifulSoup(link.content, 'html.parser')
-		parsed_webpage = parsed_webpage.find("table", class_="content-table table table-condensed table-bordered")
-		parsed_webpage = parsed_webpage.find_all("th")
-	return boilingpoints
+		parsed_webpage = parsed_webpage.find("table", class_="table table-bordered")
+		parsed_webpage = parsed_webpage.find("tbody")
+		parsed_webpage = parsed_webpage.find_all("td")
+		meltingpoint.append(parsed_webpage[1])
+		boilingpoint.append(parsed_webpage[3])
+		solubility.append(parsed_webpage[5])
+		# for tag in parsed_webpage:
+			# print(tag.text)
+			
+			# if parsed_webpage[i].text == "Melting Point":
+			# 	print(parsed_webpage[i + 1])
+		
+
+		# parsed_webpage = parsed_webpage.find_all("th")
+	return meltingpoint, boilingpoint, solubility
 
 def make_data_table(names, links, structures_filenames, weights):
 	listy = []
@@ -103,13 +117,14 @@ def main():
 	links = get_links(parsed)
 	# abundances = find_abundances(links)
 	# weights = find_weights(links)
-	boilingpoints = find_boilingpoint(links)
+	meltingpoint, boilingpoint, solubility = find_bp_mp_sol(links)
 
 	# data_table = make_data_table(names, links, structures_filenames, weights, abundances)
 	print("names:", len(names))
-	print("abundances", len(abundances))
 	for i in range(len(names)):
-		print(names[i], ":", boilingpoints[i])
+		print(names[i], ":", boilingpoint[i])
+		print(names[i], ":", meltingpoint[i])
+		print(names[i], ":", solubility[i])
 
 
 if __name__ == '__main__':
