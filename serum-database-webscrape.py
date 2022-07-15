@@ -2,9 +2,9 @@ from bs4 import BeautifulSoup
 import requests
 #import ben's
 #todo
-#only get links and soupify pages for compounds once
-#generalize to all pages on hsm
-#make output pretty
+#1. only get links and soupify pages for compounds once
+#3. generalize to all pages on hsm
+#2. make output pretty
 
 def get_url(link):
 	return requests.get(link)
