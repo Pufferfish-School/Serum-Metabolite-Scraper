@@ -1,6 +1,10 @@
 from bs4 import BeautifulSoup
 import requests
 #import ben's
+#todo
+#only get links and soupify pages for compounds once
+#generalize to all pages on hsm
+#make output pretty
 
 def get_url(link):
 	return requests.get(link)
@@ -48,7 +52,7 @@ def get_structure_link(parsed):
 		link = "https://serummetabolome.ca" + link
 		links.append(link)
 	return links
-	
+
 # uncomment to get images saved
 def get_structures(parsed, names):
 	links = get_structure_link(parsed)
