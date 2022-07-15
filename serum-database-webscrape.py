@@ -4,6 +4,7 @@ import requests
 #todo
 #1. DONE get the page for each metabolite once, and soup it once
 #2. make output pretty
+#2.5 WITH images
 #3. DONE generalize to all pages on hsm
 
 def get_url(link):
