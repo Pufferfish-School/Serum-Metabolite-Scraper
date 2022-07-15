@@ -2,9 +2,9 @@ from bs4 import BeautifulSoup
 import requests
 #import ben's
 #todo
-#1. get the page for each metabolite once, and soup it once
+#1. DONE get the page for each metabolite once, and soup it once
 #2. make output pretty
-#3. generalize to all pages on hsm
+#3. DONE generalize to all pages on hsm
 
 def get_url(link):
 	return requests.get(link)
