@@ -7,6 +7,8 @@ import requests
 #2.5 WITH images
 #3. DONE generalize to all pages on hsm
 
+PAGE_MAX = 154
+
 def get_url(link):
 	return requests.get(link)
 
@@ -31,24 +33,23 @@ def get_links(parsed):
 def get_structure_link(parsed):
 	parsed_struct = parsed.find_all("td", class_="metabolite-structure")
 	links = []
-	for link in parsed_struct:
-		link = link.find("img")
-		link = link.get("src")
-		link = "https://serummetabolome.ca" + link
-		links.append(link)
+	for tag in parsed_struct:
+		img = tag.find("img")
+		src = img.get("src")
+		links.append("https://serummetabolome.ca" + src)
 	return links
 
 # uncomment to get images saved
 def get_structures(parsed, names):
 	links = get_structure_link(parsed)
-	structures_filenames = []
+	structure_filenames = []
 	for i in range(len(links)):
 		webpage = requests.get(links[i])
 		filename = names[i]
 		# with open(filename + ".svg", 'wb') as f:
 		# 	f.write(webpage.content)
-		structures_filenames.append(filename)
-	return structures_filenames
+		structure_filenames.append(filename)
+	return structure_filenames
 
 def find_abundances(links):
 	abundances = []
@@ -91,27 +92,27 @@ def find_bp_mp_sol(links):
 		meltingpoint.append(parsed_webpage[1].text)
 		boilingpoint.append(parsed_webpage[2].text)
 		solubility.append(parsed_webpage[7].text)
-	return meltingpoint, boilingpoint, solubility	
+	return meltingpoint, boilingpoint, solubility
 
-def make_data_table(names, links, structures_filenames, weights):
+def make_data_table(names, links, structure_filenames, weights):
 	listy = []
 	for i in range(len(names)):
-		listy.append([names[i], links[i], structures_filenames[i], weights[i], abundances[i]])
+		listy.append([names[i], links[i], structure_filenames[i], weights[i], abundances[i]])
 	return listy
 
 def main():
-	for i in range(1, 154):
-		url_obj = get_url('https://serummetabolome.ca/metabolites?c=hmdb_id&d=up&filter=true&page=' + str(i) + '&quantified=1')
+	for i in range(1, PAGE_MAX + 1):
+		url_obj = get_url('https://serummetabolome.ca/metabolites?quantified=1&page=' + str(i))
 		parsed = BeautifulSoup(url_obj.content, 'html.parser')
-		
+
 		names = get_names(parsed)
-		structures_filenames = get_structures(parsed, names)
+		structure_filenames = get_structures(parsed, names)
 		links = get_links(parsed)
 		abundances = find_abundances(links)
 		weights = find_weights(links)
 		meltingpoint, boilingpoint, solubility = find_bp_mp_sol(links)
 
-		# data_table = make_data_table(names, links, structures_filenames, weights, abundances)
+		# data_table = make_data_table(names, links, structure_filenames, weights, abundances)
 		print("names:", len(names))
 		for i in range(len(names)):
 			print(names[i])
