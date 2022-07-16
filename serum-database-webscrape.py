@@ -1,127 +1,135 @@
 from bs4 import BeautifulSoup
 import requests
+import collections
+import multiprocessing
 #import ben's
+
 #todo
 #1. DONE get the page for each metabolite once, and soup it once
 #2. make output pretty
 #2.5 WITH images
 #3. DONE generalize to all pages on hsm
 
+URL = "https://serummetabolome.ca/metabolites"
 PAGE_MAX = 154
 
-def get_url(link):
-	return requests.get(link)
+def get_metabolite_names(outer_webpage, data_table):
+    """ Grabs the metabolite names from the outer webpage and sticks them in the data table. """
+    for name_tag in outer_webpage.find_all("td", class_="metabolite-name"):
+        data_table[name_tag.get_text().strip()] = {}
 
-def get_names(parsed):
-	parsed_names = parsed.find_all("td", class_="metabolite-name")
-	names = []
-	for name in parsed_names:
-		names.append(name.get_text().strip())
-	return names
+def get_structure_image_links(outer_webpage, data_table):
+    """ Grabs the metabolite image links from the outer webpage and sticks them in the data table. """
+    structure_tags = outer_webpage.find_all("td", class_="metabolite-structure")
+    for name, structure_tag in zip(data_table.keys(), structure_tags):
+        img = structure_tag.find("img")
+        src = img.get("src")
+        data_table[name]["structure_image_link"] = "https://serummetabolome.ca" + src
 
-def get_links(parsed):
-	parsed_links = parsed.find_all("td", class_="metabolite-link")
-	links = []
-	for link in parsed_links:
-		link = link.find("a")
-		link = link.get("href")
-		link = get_url(link)
-		link = BeautifulSoup(link.content, 'html.parser')
-		links.append(link)
-	return links
+def get_metabolite_webpages(outer_webpage):
+    """ Get the metabolite webpages. It's gross, but we do this with a genexpr
+        to avoid having all the webpages in memory at once. """
+    return (BeautifulSoup(requests.get(link_tag.find("a").get("href")).content, 'html.parser')
+            for link_tag in outer_webpage.find_all("td", class_="metabolite-link"))
 
-def get_structure_link(parsed):
-	parsed_struct = parsed.find_all("td", class_="metabolite-structure")
-	links = []
-	for tag in parsed_struct:
-		img = tag.find("img")
-		src = img.get("src")
-		links.append("https://serummetabolome.ca" + src)
-	return links
+def get_abundances(metabolite_webpage, data_table_row):
+    """ Get the abundances for one metabolite. """
 
-# uncomment to get images saved
-def get_structures(parsed, names):
-	links = get_structure_link(parsed)
-	structure_filenames = []
-	for i in range(len(links)):
-		webpage = requests.get(links[i])
-		filename = names[i]
-		# with open(filename + ".svg", 'wb') as f:
-		# 	f.write(webpage.content)
-		structure_filenames.append(filename)
-	return structure_filenames
+    # The page has 2 tables; one for normal concentrations, and another for abnormal concentrations.
+    # We want normal concentrations.
+    conc_tables = metabolite_webpage.find_all("table", class_="table table-condensed table-striped concentrations")
 
-def find_abundances(links):
-	abundances = []
-	for i in range(len(links)):
-		found_one = False
-		abundances.append([])
-		parsed_webpage = links[i].find_all("table", class_="table table-condensed table-striped concentrations")
-		parsed_webpage = parsed_webpage[0].find_all("tbody")
-		parsed_webpage = parsed_webpage[0].find_all("tr")
-		for page in parsed_webpage:		
-			page = page.find_all("td")
-			found_one = True
-			abundances[i].append(page[2].text)
-		if not found_one:
-			abundances.append("detected and quantified measurement not found")
-	return abundances
+    if not 1 <= len(conc_tables) <= 2:
+        return
 
-def find_weights(links):
-	weights = []
-	for link in links:
-		parsed_webpage = link.find("table", class_="content-table table table-condensed table-bordered")
-		parsed_webpage = parsed_webpage.find_all("th")
-		text = "Monoisotopic Molecular Weight"
-		for tags in parsed_webpage:
-			if tags.string == text:
-				parsed_webpage = tags.find_next_siblings("td")
-				for whatever in parsed_webpage:
-					weights.append(whatever.text)
-				break
-	return weights
+    data_table_row["abundances"] = []
 
-def find_bp_mp_sol(links):
-	boilingpoint = []
-	meltingpoint = []
-	solubility = []
-	for link in links:
-		parsed_webpage = link.find("table", class_="table table-bordered")
-		parsed_webpage = parsed_webpage.find("tbody")
-		parsed_webpage = parsed_webpage.find_all("td")
-		meltingpoint.append(parsed_webpage[1].text)
-		boilingpoint.append(parsed_webpage[2].text)
-		solubility.append(parsed_webpage[7].text)
-	return meltingpoint, boilingpoint, solubility
+    normal_conc_table = conc_tables[0]
+    conc_table_rows = normal_conc_table.find("tbody").find_all("tr")
+    for conc_table_row in conc_table_rows:
+        conc_row_entries = conc_table_row.find_all("td")
+        if not len(conc_row_entries) == 8: import pdb; pdb.set_trace()
 
-def make_data_table(names, links, structure_filenames, weights):
-	listy = []
-	for i in range(len(names)):
-		listy.append([names[i], links[i], structure_filenames[i], weights[i], abundances[i]])
-	return listy
+        # A concentration table row looks like this:
+        # Biospecimen | Status | Value | Age | Sex | Condition | Reference | Details
+        data_table_row["abundances"].append({"biospecimen": conc_row_entries[0].text,
+                                             "status":      conc_row_entries[1].text,
+                                             "value":       conc_row_entries[2].text,
+                                             "age":         conc_row_entries[3].text,
+                                             "sex":         conc_row_entries[4].text,
+                                             "condition":   conc_row_entries[5].text})
+
+
+def get_weight(metabolite_webpage, data_table_row):
+    """ Get the weight of one metabolite. """
+
+    property_table = metabolite_webpage.find("table", class_="content-table table table-condensed table-bordered")
+    if property_table is None:
+        return
+
+    property_table_headers = property_table.find_all("th")
+    if property_table_headers is None:
+        return
+
+    weight_headers = [h for h in property_table_headers if h.string == "Monoisotopic Molecular Weight"]
+    if not len(weight_headers) == 1: import pdb; pdb.set_trace()
+
+    weight_header = weight_headers[0]
+    weights = weight_header.find_next_siblings("td")
+    if not len(weights[0]) == 1: import pdb; pdb.set_trace()
+
+    data_table_row["weight"] = weights[0].text
+
+def get_metabolite_data(metabolite_webpage, data_table_row):
+    """ Get MP, BP, solubility, and logp for one metabolite. """
+
+    # Should be 4 properties, each with a title, value, and source, so 12 entries in total
+    property_table = metabolite_webpage.find("table", class_="table table-bordered")
+    if property_table is None:
+        return
+
+    property_table_body = property_table.find("tbody")
+    if property_table_body is None:
+        return
+
+    property_table_entries = property_table_body.find_all("td")
+
+    if not len(property_table_entries) == 12: import pdb; pdb.set_trace()
+
+    data_table_row["melting point"] = property_table_entries[1].text
+    data_table_row["boiling point"] = property_table_entries[4].text
+    data_table_row["solubility"] = property_table_entries[7].text
+    data_table_row["logp"] = property_table_entries[10].text
+
+def get_data_from_outer_page(page_number):
+    """ Process one outer webpage. """
+
+    data_table = collections.OrderedDict()
+    http_response = requests.get(f'{URL}?quantified=1&page={page_number}')
+    outer_webpage = BeautifulSoup(http_response.content, 'html.parser')
+
+    get_metabolite_names(outer_webpage, data_table)
+    get_structure_image_links(outer_webpage, data_table)
+
+    for name, metabolite_webpage in zip(data_table.keys(), get_metabolite_webpages(outer_webpage)):
+        get_metabolite_data(metabolite_webpage, data_table[name])
+        get_abundances(metabolite_webpage, data_table[name])
+        get_weight(metabolite_webpage, data_table[name])
+
+    print(f"Done with page {page_number}")
+    return data_table
+
 
 def main():
-	for i in range(1, PAGE_MAX + 1):
-		url_obj = get_url('https://serummetabolome.ca/metabolites?quantified=1&page=' + str(i))
-		parsed = BeautifulSoup(url_obj.content, 'html.parser')
+    full_data_table = {}
+    with multiprocessing.Pool(multiprocessing.cpu_count()) as pool:
+        page_data_tables = pool.map(get_data_from_outer_page, range(1, PAGE_MAX + 1))
 
-		names = get_names(parsed)
-		structure_filenames = get_structures(parsed, names)
-		links = get_links(parsed)
-		abundances = find_abundances(links)
-		weights = find_weights(links)
-		meltingpoint, boilingpoint, solubility = find_bp_mp_sol(links)
+    for page_data_table in page_data_tables:
+        full_data_table.update(page_data_table)
 
-		# data_table = make_data_table(names, links, structure_filenames, weights, abundances)
-		print("names:", len(names))
-		for i in range(len(names)):
-			print(names[i])
-			print("abundance:", abundances[i])
-			print("mw:", weights[i])
-			print("meltingpoint:", meltingpoint[i])
-			print("boilingpoint:", boilingpoint[i])
-			print("solubility:", solubility[i])
-
+    with open("out.py" ,"r") as f:
+        f.write(str(full_data_table))
 
 if __name__ == '__main__':
-	main()
+    main()
