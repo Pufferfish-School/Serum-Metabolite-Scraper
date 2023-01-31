@@ -4,7 +4,6 @@ from dataclasses import dataclass
 import re
 
 # todo
-# Do numbers
 # Make experiment/predict distinction
 
 NAMESPACE = "{http://www.hmdb.ca}"
@@ -18,13 +17,14 @@ class MetaboliteData:
     solubility: str
     logp: str
     weight: float
+    pubchem_id: str
 
     def __str__(self):
-        return f'"{self.name}","{self.abundance_in_blood}","{self.melting_point}","{self.boiling_point}","{self.solubility}","{self.logp}","{self.weight}"'
+        return f'"{self.name}","{self.abundance_in_blood}","{self.melting_point}","{self.boiling_point}","{self.solubility}","{self.logp}","{self.weight}","{self.pubchem_id}"'
     
     @staticmethod
     def get_header_line():
-        return '"Name","Abundance in Blood (uM)","Melting Point (°C)","Boiling Point (°C)","Solubility (mg/mL)","LogP","Monoisotopic Molecular Weight (Da)"\n'
+        return '"Name","Abundance in Blood (uM)","Melting Point (°C)","Boiling Point (°C)","Solubility (mg/mL)","LogP","Monoisotopic Molecular Weight (Da)","PubChem Compound ID"\n'
 
 def extract_property(metabolite_tag: lxml.etree._Element, property_group: str, property_name: str) -> str:
         try:
@@ -42,27 +42,29 @@ def scrape_metabolite_data(metabolite_tag: lxml.etree._Element) -> Optional[Meta
     except StopIteration:
         return None
 
-    metabolite_abundance_in_blood = blood_conc_tag.find(NAMESPACE + "concentration_value").text
+    abundance = blood_conc_tag.find(NAMESPACE + "concentration_value").text
 
     if blood_conc_tag.find(NAMESPACE + "concentration_units").text != "uM":
         print(f"What the heck is this unit: {blood_conc_tag.find(NAMESPACE + 'concentration_units').text}")
 
-    metabolite_weight = metabolite_tag.find(NAMESPACE + "monisotopic_molecular_weight").text
-    if not metabolite_weight:
-        metabolite_weight = "N/A"
+    weight = metabolite_tag.find(NAMESPACE + "monisotopic_molecular_weight").text
+    if not weight:
+        weight = "N/A"
     
-    metabolite_melting_point = extract_property(metabolite_tag, "experimental_properties", "melting_point")
-    metabolite_boiling_point = extract_property(metabolite_tag, "experimental_properties", "boiling_point")
+    pubchem_id = metabolite_tag.find(NAMESPACE + "pubchem_compound_id").text
 
-    metabolite_solubility = extract_property(metabolite_tag, "experimental_properties", "water_solubility")
-    if metabolite_solubility == "N/A":
-        metabolite_solubility = extract_property(metabolite_tag, "predicted_properties", "solubility")
+    melting_point = extract_property(metabolite_tag, "experimental_properties", "melting_point")
+    boiling_point = extract_property(metabolite_tag, "experimental_properties", "boiling_point")
+
+    solubility = extract_property(metabolite_tag, "experimental_properties", "water_solubility")
+    if solubility == "N/A":
+        solubility = extract_property(metabolite_tag, "predicted_properties", "solubility")
  
-    metabolite_logp = extract_property(metabolite_tag, "experimental_properties", "logp")
-    if metabolite_logp == "N/A":
-        metabolite_logp = extract_property(metabolite_tag, "predicted_properties", "logp")
+    logp = extract_property(metabolite_tag, "experimental_properties", "logp")
+    if logp == "N/A":
+        logp = extract_property(metabolite_tag, "predicted_properties", "logp")
 
-    return MetaboliteData(metabolite_name, metabolite_abundance_in_blood, metabolite_melting_point, metabolite_boiling_point, metabolite_solubility, metabolite_logp, metabolite_weight)
+    return MetaboliteData(metabolite_name, abundance, melting_point, boiling_point, solubility, logp, weight, pubchem_id)
 
 def main() -> None:
     data_table: List[MetaboliteData] = []
